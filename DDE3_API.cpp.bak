@@ -1,0 +1,2327 @@
+#include "stdafx.h"
+#include "DDE3_API.h"
+#include <math.h>
+#include <time.h>
+#include <stdlib.h> 
+#include <signal.h>
+#include <fstream>
+#include "mkfilter.h"
+#include <math.h>
+
+#undef	PI
+#define PI	    3.14159265358979323846  /* Microsoft C++ does not define M_PI ! */
+
+#define __CHOFFSET				0x10000000
+
+//DAC
+
+#define RFA_DACCNRL_RESET					0xF0000015
+#define RFA_DACCNRL_DACSEL					0xF0000016
+#define RFA_DACCNRL_SYNC					0xF0000014
+#define RFA_DACCNRL_VAL						0xF0000011
+#define RFA_DACCNRL_STROBE					0xF0000013
+
+
+//CLOCK GENERATOR
+#define RFA_CLKGEN_POWER					0xF0000030
+#define RFA_CLKGEN_CFG0						0xF0000001
+#define RFA_CLKGEN_CFG1						0xF0000002
+#define RFA_CLKGEN_STROBE					0xF0000003
+#define RFA_CLKGEN_CFG2      				0xF0000004
+#define RFA_CLKGEN_CFG3      				0xF0000005
+#define RFA_CLKGEN_CFG4      				0xF0000006
+#define RFA_CLKGEN_CFG5      				0xF0000007
+#define RFA_CLKGEN_CFG6      				0xF0000008
+#define RFA_CLKGEN_CFG7      				0xF0000009
+#define RFA_CLKGEN_CFG8      				0xF000000A
+
+
+
+
+//ChannelGlobalControl
+#define RFA_CHANNEL_ENABLE					0x0F000002
+
+
+
+//TIMEBASE
+#define RFA_TIMEBASE_SEED1					0x00100000
+#define RFA_TIMEBASE_SEED2					0x00100001
+#define RFA_TIMEBASE_SEED3					0x00100002
+#define RFA_TIMEBASE_SEED4					0x00100003
+#define RFA_TIMEBASE_SEEDPROG				0x00100004
+#define RFA_TIMEBASE_POISSONP				0x00100006
+#define RFA_TIMEBASE_PARFLAG				0x00100007
+#define RFA_TIMEBASE_DEADTIME				0x00100008
+#define RFA_TIMEBASE_RATE					0x00100009
+#define RFA_TIMEBASE_STATSOURCEMUX			0x0010000A
+#define RFA_TIMEBASE_TRIGGEROUTLEN			0x0010000B
+#define RFA_TIMEBASE_TRIGGEROUTEN			0x0010000C
+
+//DIGITAL RC
+
+#define RFA_DRC_PALFA1						0x00300000
+#define RFA_DRC_PALFA1B						0x00300001
+#define RFA_DRC_PALFA2						0x00300002
+#define RFA_DRC_PALFA3						0x00300003
+#define RFA_DRC_PALFA4						0x00300004
+#define RFA_DRC_LALFA1						0x00300005
+#define RFA_DRC_LALFA1B						0x00300006
+#define RFA_DRC_LALFA2						0x00300007
+#define RFA_DRC_LALFA3						0x00300008
+#define RFA_DRC_LALFA4						0x00300009
+#define RFA_DRC_RESET						0x0030000A
+#define RFA_DRC_ENABLE						0x0030000B
+#define RFA_DRC_OS							0x0030000C
+#define RFA_DRC_BYPASSLOWPASS				0x0030000D
+
+
+//SHAPES
+#define RFA_SHAPE_OFFSET					0x00100000
+#define RFA_SHAPE_BA						0x00500000
+#define RFA_SHAPE_ENABLE					0x0050F000
+#define RFA_SHAPE_MULTISHAPEID				0x0050F001
+#define RFA_SHAPE_PROG						0x0050F002
+#define RFA_SHAPE_LEN						0x0050F003
+#define RFA_SHAPE_INTERP_ENABLE				0x0050F004
+#define RFA_SHAPE_INTERP_CROSS				0x0050F005
+#define RFA_SHAPE_INTERP_DOWN				0x0050F006
+#define RFA_SHAPE_INTERP_UP					0x0050F007
+
+
+//MULTISHAPE
+#define RFA_MSHAPE_SEED1					0x00400000
+#define RFA_MSHAPE_SEED2					0x00400001
+#define RFA_MSHAPE_SEMEPROG					0x00400002
+#define RFA_MSHAPE_PROB1					0x00400003
+#define RFA_MSHAPE_PROB2					0x00400004
+#define RFA_MSHAPE_PROB3					0x00400005
+#define RFA_MSHAPE_BYPASS					0x00400006
+
+
+//GAUSS
+#define RFA_NOISE_GAUSSM					0x01400000
+#define RFA_NOISE_SAMPL						0x01400003
+#define RFA_NOISE_TEMPSEED1					0x01400004
+#define RFA_NOISE_TEMPSEED2					0x01400005
+#define RFA_NOISE_STARTSEEDGEN				0x01400009
+#define RFA_NOISE_ENABLELFSRUSB				0x01400006
+#define RFA_NOISE_RESETLFSR					0x01400007
+#define RFA_NOISE_CTRLLFSR					0x01400008
+
+
+//1/F NOISE
+#define RFA_NF_MAGNITUDE					0x01500000
+#define RFA_NF_SEME1						0x01500001
+#define RFA_NF_SEME2						0x01500002
+#define RFA_NF_RESETLFSRUSB					0x01500003
+#define RFA_NF_ENABLELFSRUSB				0x01500004
+#define RFA_NF_COEFFLOAD					0x01500006
+#define RFA_NF_COEFF						0x01600000
+
+//RANDOM WALK
+#define RFA_RW_MAG							0x01900000
+#define RFA_RW_SEED1						0x01900001
+#define RFA_RW_SEED2						0x01900002
+#define RFA_RW_STARTSEEDGEN					0x01900003
+
+//RANDOM NOISE
+#define RFA_RN_MAG							0x01700002
+#define RFA_RN_SEED1						0x01700000
+#define RFA_RN_SEED2						0x01700001
+#define RFA_RN_RESETLFSR					0x01700003
+#define RFA_RN_PCENABLELFSR					0x01700004
+#define RFA_RN_CTRLLFSR						0x01700005
+
+
+//RANDOM NOISE
+#define RFA_BLD_BA							0x01800000
+#define RFA_BLD_PROG						0x0180F000
+#define RFA_BLD_MEMLEN						0x0180F001
+#define RFA_BLD_RSLOW						0x0180F002
+#define RFA_BLD_ASLOW						0x0180F003
+#define RFA_BLD_RFAST						0x0180F004
+#define RFA_BLD_AFAST						0x0180F005
+#define RFA_BLD_ENABLE						0x0180F006
+#define RFA_BLD_RESET						0x0180F007
+
+
+
+//OFFSET GAIN
+#define RFA_OFFGAIN_GAIN					0x0F000001
+#define RFA_OFFGAIN_OFFSET					0x0F000000
+#define RFA_OFFGAIN_INVERT					0x0F000004
+//#define RFA_OFFGAIN_ENABLE					0x0F000002
+#define RFA_OFFGAIN_OUTFILTER				0x0F000005
+#define RFA_OFFGAIN_ANALOGSELECT			0x0F000006
+
+
+//OFFSET ICAPDNA
+#define RFA_ICAPDNA_REBOOTADDR			0x00000700
+#define RFA_ICAPDNA_UNLOCK				0x00000701
+#define RFA_ICAPDNA_nREBOOT				0x00000702
+#define RFA_ICAPDNA_ENABLE				0x00000703
+#define RFA_ICAPDNA_UID1				0x00000704
+#define RFA_ICAPDNA_UID2				0x00000705
+#define RFA_ICAPDNA_CHECK1				0x00000706
+#define RFA_ICAPDNA_CHECK2				0x00000707
+#define RFA_ICAPDNA_CHECK3				0x00000708
+#define RFA_ICAPDNA_CHECK4				0x00000709
+#define RFA_ICAPDNA_CHECK5				0x0000070A
+#define RFA_ICAPDNA_CHECK6				0x0000070B
+#define RFA_ICAPDNA_CHECK7				0x0000070C
+#define RFA_ICAPDNA_CHECK8				0x0000070D
+#define RFA_ICAPDNA_WF					0x0000070E
+#define RFA_ICAPDNA_EEPROM				0x0000070F
+
+
+
+//ENERGY
+#define RFA_ENERGY_MEMBA					0x00200000
+#define RFA_ENERGY_SEED1					0x0020F000
+#define RFA_ENERGY_SEED2					0x0020F001
+#define RFA_ENERGY_STARTSEEDGEN				0x0020F002
+#define RFA_ENERGY_PROGMODE					0x0020F003
+#define RFA_ENERGY_FIXSPE					0x0020F004
+#define RFA_ENERGY_FIXENERGY				0x0020F005
+#define RFA_ENERGY_FLUSH					0x0020F006
+
+
+//SPECTRUM LOOPBACK
+#define RFA_SPELOOP_MEMBA				0x10000000
+#define RFA_SPELOOP_RESETSM				0x01A00000
+#define RFA_SPELOOP_MODE				0x01A00001
+#define RFA_SPELOOP_SCALE				0x01A00002
+
+//MONITOR
+#define RFA_MON_MEMBA					0x20000000
+#define RFA_MON_RESTOREACQ				0x01B00000
+#define RFA_MON_CPSR_DATAREADY			0x0003F001
+#define RFA_MON_CPSR					0x0003F002
+#define RFA_MON_CPSLIVER				0x0003F003
+#define RFA_MON_CPSR_CCOUNTER1			0x0003F004
+#define RFA_MON_CPSR_CCOUNTER2			0x0003F005
+#define RFA_MON_CPSR_OVERLOAD_OVERFLOW	0x0003F006
+#define RFA_MON_CPSR_RESET				0x0003F007
+
+
+//INFOS
+#define RFA_INFO_CLKFREQ				0x00000001
+#define RFA_INFO_CHANNELCOUNT			0x00000002
+#define RFA_INFO_CHANNELOFFSET			0x00000003
+
+#define RFA_INFO_ISTRVER				0xFFF00000
+#define RFA_INFO_FIRMWARE_RELEASE		0xFFF00001
+#define RFA_INFO_SERIAL_NUMBER			0xFFF00002
+#define RFA_INFO_UID0					0xFFF00002
+#define RFA_INFO_UID1					0xFFF00003
+#define RFA_INFO_OPTIONS				0xFFF00004
+#define RFA_INFO_BOARDREV				0xFFF00005
+#define RFA_INFO_ANALOGINFO				0xFFF00006
+#define RFA_STATUS_CONNECTION_MODE		0xFFF00007
+
+//Display
+#define RFA_UC_BA					    0xF00000A0
+#define RFA_UC_CHOFF				    0x00000040
+#define RFA_DISPLAY_TIMEMODE			0x00000000
+#define RFA_DISPLAY_RATE				0x00000001
+#define RFA_DISPLAY_RATEP				0x00000003
+#define RFA_DISPLAY_TIMESTR				0x00000005
+#define RFA_DISPLAY_ENERGYMODE			0x0000000C
+#define RFA_DISPLAY_ENERGY				0x0000000D
+#define RFA_DISPLAY_ENERGYSTR			0x0000000E
+#define RFA_DISPLAY_SHAPE				0x00000015
+#define RFA_DISPLAY_LIVE				0x0000001C
+
+#define RFA_PORTEXP1					0x00000020
+#define RFA_PORTEXP2					0x00000021
+#define RFA_PORTEXP3					0x00000022
+
+
+#define RFA_CONNECTED					0x00000023
+
+
+
+#define RFA_INFO_WRITETOFLASH			0x00000009
+#define RFA_INFO_gOFFSET				0x0000000A
+#define RFA_INFO_gGAIN					0x0000000B
+#define RFA_INFO_gCTV					0x0000000C
+
+
+#define REG_COUNT				26					
+#define REG_ADDRESS				0
+
+//top_module
+#define RFA_GLOBAL_LFSR_SOURCE_CONTROL	0
+#define RFA_GLOBAL_LFSR_RESET_ETH	1
+#define RFA_GLOBAL_LFSR_ENABLE_ETH	2
+#define RFA_GLOBAL_LFSR_ONESHOT	3
+#define RFA_GLOBAL_PLAYPAUSE_ENABLE	4
+#define RFA_GLOBAL_PLAYPAUSA_MORESHOT_COUNTER	5
+#define RFA_GLOBAL_PLAYPAUSA_MORESHOT_ENABLE	6
+//fire_pulse_source	
+#define RFA_TIMEBASE_SOURCE_REG	7
+//timebase_by_rate	
+#define RFA_CONSTANTRATE_REG	8
+//timebase_statistic	
+#define RFA_STAT_POISSON_P	9
+#define RFA_LFSR_SOURCE_CONTROL_TBS	10
+#define RFA_LFSR_PC_ENABLE_ETH_TBS	11
+#define RFA_RESET_LFSR_ETH_TBS	12
+#define RFA_PAR_FLAG_REG	13
+#define RFA_DEADTIME_REG	14
+#define RFA_SEME1_TBS	15
+#define RFA_SEME2_TBS	16
+//spectrum_modulator	
+#define RFA_ENERGY_SOURCE_REG	17
+#define RFA_CONSTANT_ENERGY_REG	18
+#define RFA_PROG_MODE	19
+#define RFA_SCALE_FACTOR	20
+#define RFA_RESET_LFSR_ETH_SP_MOD	21
+#define RFA_LFSR_PC_ENABLE_ETH_SP_MOD	22
+#define RFA_LFSR_SOURCE_CONTROL_SP_MOD	23
+#define RFA_SEME1_SP_MOD	24
+#define RFA_SEME2_SP_MOD	25
+
+// Default values
+//top
+#define	RFD_TIMEBASE_SOURCE_REG					00
+#define	RFD_CONSTANTRATE_REG					0x00F00000
+#define	RFD_GLOBAL_LFSR_RESET_ETH				0
+#define	RFD_GLOBAL_LFSR_ENABLE_ETH				1
+#define	RFD_GLOBAL_LFSR_SOURCE_CONTROL			00
+#define	RFD_GLOBAL_LFSR_ONESHOT					0
+#define	RFD_GLOBAL_PLAYPAUSE_ENABLE				1
+#define	RFD_GLOBAL_PLAYPAUSA_MORESHOT_COUNTER	0x00000000
+#define	RFD_GLOBAL_PLAYPAUSA_MORESHOT_ENABLE	0
+#define	RFD_ENERGY_SOURCE_REG					01
+#define	RFD_CONSTANT_ENERGY_REG					0x7FFF
+//timebase_statistic
+#define	RFD_STAT_POISSON_P						0x00400000
+#define	RFD_LFSR_SOURCE_CONTROL_TBS				00
+#define	RFD_LFSR_PC_ENABLE_ETH_TBS				1
+#define	RFD_RESET_LFSR_ETH_TBS					0
+#define	RFD_PAR_FLAG_REG						0
+#define	RFD_DEADTIME_REG						0x0000
+#define	RFD_SEME1_TBS							0x166C3967
+#define	RFD_SEME2_TBS							0x1AF0F0E9
+//spectrum modulator		
+#define	RFD_PROG_MODE							0
+#define	RFD_SCALE_FACTOR						00
+#define	RFD_RESET_LFSR_ETH_SP_MOD				0
+#define	RFD_LFSR_PC_ENABLE_ETH_SP_MOD			1
+#define	RFD_LFSR_SOURCE_CONTROL_SP_MOD			00
+#define	RFD_SEME1_SP_MOD						0x2CD872CE
+#define	RFD_SEME2_SP_MOD						0x35E1E1D2
+
+unsigned int REGISTER_MEMMAP[REG_COUNT];
+unsigned int _REGISTER_MEMMAP[REG_COUNT];
+
+DDE3_API::DDE3_API()
+{
+	peout1=0;
+	return;
+}
+
+DDE3_API::~DDE3_API()
+{
+		return;
+}
+
+
+	void DDE3_API::Allocate()
+	{
+		niHAL = new NIHAL::NI_HAL();
+		return;
+	}
+
+	void DDE3_API::Destroy()
+	{
+		niHAL->CloseConnection();
+		delete niHAL;
+	}
+
+
+NI_RESULT DDE3_API::USBEnumerate(tUSBDevice *pvArg1, unsigned int *numDevs)
+{
+	return niHAL->USBEnumerate(pvArg1, numDevs);
+}
+
+NI_RESULT DDE3_API::ETHEnumerate(tETHDevices *pvArg1)
+{
+	return niHAL->ETHEnumerate(pvArg1);
+}
+
+NI_RESULT DDE3_API::ETHGetSerialNumber(short int port, char *IPAddress, char *SN)
+{
+	return niHAL->ETHGetSerialNumber(port,IPAddress,SN);
+}
+
+typedef struct {
+	unsigned long INSTRUMENTVERSION;
+	unsigned long FIRMWARERELEASE;
+	unsigned long SERIALNUMBER;
+	unsigned long UID0;
+	unsigned long UID1;
+	unsigned long OPTIONS;
+	unsigned long HWBOARDREV;
+	unsigned long OUTPUTCHANNELS;
+	unsigned long INPUTCHANNELS;
+}t_HWINFO;
+
+t_HWINFO HWINFO;
+NI_RESULT DDE3_API::ReadHardwareProperties()
+{
+	unsigned int TTT[32];
+	unsigned int TEMP;
+	float t;
+	unsigned int OFS;
+	int i;
+
+
+	niHAL->WriteReg(0xFF, 0xFFFF0000);
+
+	if (niHAL->ReadArray(TTT, 0xFFFF0000, 3) != NI_OK)
+		return NI_ERROR;
+
+	_clockFREQUENCY=875000000/4 * 1.052;//250000000/1000*875;
+
+	if (niHAL->ReadArray(TTT, 0xFFF00000,9) != NI_OK)
+		return NI_ERROR;
+
+	i = 0;
+	HWINFO.INSTRUMENTVERSION = TTT[i++];
+	HWINFO.FIRMWARERELEASE = TTT[i++];
+	HWINFO.SERIALNUMBER = TTT[i++];
+	HWINFO.UID0 = TTT[i++];
+	HWINFO.UID1 = TTT[i++];
+	HWINFO.OPTIONS = TTT[i++];
+	HWINFO.HWBOARDREV = TTT[i++];
+	HWINFO.OUTPUTCHANNELS = TTT[i] & 0xF;
+	HWINFO.INPUTCHANNELS = (TTT[i++] >> 28) & 0xF;
+
+	
+	if (HWINFO.INSTRUMENTVERSION != 0x10005850)
+		return NI_INVALID_HARDWARE;
+
+	//if (niHAL->ReadReg (&TEMP, RFA_INFO_HWREV) != NI_OK)
+	//	return NI_ERROR ;
+	//if (TEMP>>24 & 0xF != 0xA)
+	//	return NI_INVALID_HARDWARE;
+
+
+	//if (niHAL->ReadReg (&TEMP, RFA_INFO_CLKFREQ)!= NI_OK)
+	//	return NI_ERROR ;
+	//_clockFREQUENCY = TEMP;
+	//_clockFREQUENCY=250000000;
+
+
+	//if (niHAL->ReadReg (&TEMP, RFA_INFO_CHANNELCOUNT)!= NI_OK)
+	//	return NI_ERROR ;
+	//_ChannelsCount = TEMP;
+
+	//if (niHAL->ReadReg (&TEMP, RFA_INFO_CHANNELOFFSET)!= NI_OK)
+	//	return NI_ERROR ;
+	//OFS = TEMP;
+	//for (i=0;i<_ChannelsCount;i++)
+	//{
+	//	if (niHAL->ReadReg (&TEMP, RFA_INFO_gOFFSET+i*OFS)!= NI_OK)
+	//		return NI_ERROR ;
+	//	memcpy(&t, &TEMP,4);
+	//	if (TEMP!=0xFFFFFFFF)
+	//		_gOFFSET[i] = (double)t;
+	//	else
+	//		_gOFFSET[i] = 0;
+
+	//	if (niHAL->ReadReg (&TEMP, RFA_INFO_gGAIN+i*OFS)!= NI_OK)
+	//		return NI_ERROR ;
+	//	memcpy(&t, &TEMP,4);
+	//	if (TEMP!=0xFFFFFFFF)
+	//		_gGAIN[i]= (double)t;
+	//	else
+	//		_gGAIN[i]= 1;
+	//	
+	//	if (niHAL->ReadReg (&TEMP, RFA_INFO_gCTV+i*OFS)!= NI_OK)
+	//		return NI_ERROR ;
+	//	memcpy(&t, &TEMP,4);
+	//	if (TEMP!=0xFFFFFFFF)
+	//		_VoltageChannelFactor[i]= (double)t;
+	//	else
+	//	{
+	//		TEMP= 0x3A83126F;
+	//		memcpy(&t, &TEMP,4);
+	//		_VoltageChannelFactor[i]= (double) t;
+	//	}
+	//}
+
+	
+
+	return NI_OK;
+}
+NI_RESULT DDE3_API::EthernetConnect(short int port, char *IPAddress)
+{
+	NI_RESULT Status = niHAL->EthernetConnect(port, IPAddress);
+	if (Status == NI_CONNECTED)
+		{
+			niHAL->WriteReg(0, 0);
+			ConfigureCLOCKGEN();
+			ConfigureDAC(0,1);
+			ReprogramLFSREnergy(0x341abc2255aa7782,0);
+			ReprogramLFSRTimebase(0x341abc2255aa7782,0);
+			ReprogramLFSRMultishape(0x341abc2255aa7782,0);
+			ReprogramLFSRNoise(0x341abc2255aa7782,0);
+//			ReadHardwareProperties();
+			return NI_OK;
+		}
+		else
+			return NI_ERROR;
+}
+
+NI_RESULT DDE3_API::USBConnect(char *SN)
+{	int i;
+	
+	NI_RESULT Status = niHAL->USBConnect(SN);
+
+
+	if (Status == NI_CONNECTED)
+	{
+		niHAL->WriteReg(0, 0);
+		ConfigureCLOCKGEN();
+			ConfigureDAC(0,1);
+		ReadHardwareProperties	();
+
+		UpdateDisplayStatus(0,0,0,0,"",0,0,"","",100);
+		UpdateDisplayStatus(1,0,0,0,"",0,0,"","",100);
+		UnlockDisplays();
+		return NI_OK;
+	}
+		else
+			return NI_ERROR;
+}
+
+
+NI_RESULT DDE3_API::CloseConnection()
+{
+	return niHAL->CloseConnection();
+}
+
+NI_RESULT DDE3_API::ConnectionStatus()
+{
+	return niHAL->ConnectionStatus();
+}
+
+NI_RESULT DDE3_API::DHA_WriteReg(UINT32 value, UINT32 address)
+{
+	NI_STATUS Status;
+		Status = niHAL->WriteReg(value,address);
+	return Status;
+}
+
+NI_RESULT DDE3_API::DHA_ReadReg(UINT32 *value, UINT32 address)
+{
+	NI_STATUS Status;
+	Status = niHAL->ReadReg(value,address);
+	return Status;
+}
+
+NI_RESULT DDE3_API::DHA_WriteArray(UINT32 *value, UINT32 address, UINT32 length)
+{
+	NI_STATUS Status;
+	Status = niHAL->WriteArray(value,address,length);
+	return Status;
+
+}
+
+NI_RESULT DDE3_API::DHA_ReadArray(UINT32 *value, UINT32 address, UINT32 length)
+{
+	NI_STATUS Status;
+	Status = niHAL->ReadArray(value,address,length);
+	return Status;
+
+}
+
+
+NI_RESULT DDE3_API::SetuDDERegister(UINT32 value, UINT32 address)
+{
+	_REGISTER_MEMMAP[address] = value;
+	return NI_OK;
+}
+
+NI_RESULT DDE3_API::GetuDDERegister(UINT32 *value, UINT32 address)
+{
+	*value=_REGISTER_MEMMAP[address];
+	return NI_OK;
+}
+
+
+
+
+
+/*
+	CONFIGURE CHANNEL
+	enable			0					disabled
+					1					enabled
+*/
+
+
+void DDE3_API::programReg(unsigned int channel, unsigned int addr, unsigned int val)
+{
+
+
+
+}
+
+
+NI_RESULT DDE3_API::ConfigureCLOCKGEN()
+{
+	
+	//POWER ON CLK
+	if(niHAL->WriteReg(1, RFA_CLKGEN_POWER ) != NI_OK)
+		return NI_ERROR;
+	////CFG0
+	//if (niHAL->WriteReg(0x68840320, RFA_CLKGEN_CFG0) != NI_OK)
+	//	return NI_ERROR;
+	////CFG1
+	//if (niHAL->WriteReg(0xEB400301, RFA_CLKGEN_CFG1) != NI_OK)
+	//	return NI_ERROR;
+	////CFG2
+	//if (niHAL->WriteReg(0xEB040302, RFA_CLKGEN_CFG2) != NI_OK)
+	//	return NI_ERROR;
+	////CFG3
+	//if (niHAL->WriteReg(0x68860323, RFA_CLKGEN_CFG3) != NI_OK)
+	//	return NI_ERROR;
+	////CFG4
+	//if (niHAL->WriteReg(0x68860314, RFA_CLKGEN_CFG4) != NI_OK)
+	//	return NI_ERROR;
+	////CFG5
+	//if (niHAL->WriteReg(0xFC000B25, RFA_CLKGEN_CFG5) != NI_OK)
+	//	return NI_ERROR;
+	////CFG6
+	//if (niHAL->WriteReg(0x04BE03E6, RFA_CLKGEN_CFG6) != NI_OK)
+	//	return NI_ERROR;
+	////CFG7
+	//if (niHAL->WriteReg(0xBD0037F7, RFA_CLKGEN_CFG7) != NI_OK)
+	//	return NI_ERROR;
+	////CFG8
+	//if (niHAL->WriteReg(0x20009D98, RFA_CLKGEN_CFG8) != NI_OK)
+	//	return NI_ERROR;
+	
+	
+		//875  compensati
+	//CFG0
+	if (niHAL->WriteReg(0xEB400320, RFA_CLKGEN_CFG0) != NI_OK)
+		return NI_ERROR;
+	//CFG1
+	if (niHAL->WriteReg(0xEB400301, RFA_CLKGEN_CFG1) != NI_OK)
+		return NI_ERROR;
+	//CFG2
+	if (niHAL->WriteReg(0xEB040302, RFA_CLKGEN_CFG2) != NI_OK)
+		return NI_ERROR;
+	//CFG3
+	if (niHAL->WriteReg(0x68860323, RFA_CLKGEN_CFG3) != NI_OK)
+		return NI_ERROR;
+	//CFG4
+	if (niHAL->WriteReg(0x68860314, RFA_CLKGEN_CFG4) != NI_OK)
+		return NI_ERROR;
+	//CFG5
+	if (niHAL->WriteReg(0x600C0BE5, RFA_CLKGEN_CFG5) != NI_OK)
+		return NI_ERROR;
+	//CFG6
+	if (niHAL->WriteReg(0x060E0DE6, RFA_CLKGEN_CFG6) != NI_OK)
+		return NI_ERROR;
+	//CFG7
+	if (niHAL->WriteReg(0xBD087557, RFA_CLKGEN_CFG7) != NI_OK)
+		return NI_ERROR;
+	//CFG8
+	if (niHAL->WriteReg(0x20009D98, RFA_CLKGEN_CFG8) != NI_OK)
+		return NI_ERROR;
+
+	
+
+	/*
+	//875 non compensati
+	//CFG0
+	if (niHAL->WriteReg(0xEB400320, RFA_CLKGEN_CFG0) != NI_OK)
+		return NI_ERROR;
+	//CFG1
+	if (niHAL->WriteReg(0xEB400301, RFA_CLKGEN_CFG1) != NI_OK)
+		return NI_ERROR;
+	//CFG2
+	if (niHAL->WriteReg(0xEB040302, RFA_CLKGEN_CFG2) != NI_OK)
+		return NI_ERROR;
+	//CFG3
+	if (niHAL->WriteReg(0x68860323, RFA_CLKGEN_CFG3) != NI_OK)
+		return NI_ERROR;
+	//CFG4
+	if (niHAL->WriteReg(0x68860314, RFA_CLKGEN_CFG4) != NI_OK)
+		return NI_ERROR;
+	//CFG5
+	if (niHAL->WriteReg(0xFC0C0BE5, RFA_CLKGEN_CFG5) != NI_OK)
+		return NI_ERROR;
+	//CFG6
+	if (niHAL->WriteReg(0x04BE0DE6, RFA_CLKGEN_CFG6) != NI_OK)
+		return NI_ERROR;
+	//CFG7
+	if (niHAL->WriteReg(0xBD0037F7, RFA_CLKGEN_CFG7) != NI_OK)
+		return NI_ERROR;
+	//CFG8
+	if (niHAL->WriteReg(0x20009D98, RFA_CLKGEN_CFG8) != NI_OK)
+		return NI_ERROR;
+		*/
+
+		
+	/* 1GHZ
+
+		//CFG0
+	if (niHAL->WriteReg(0xEB400320, RFA_CLKGEN_CFG0) != NI_OK)
+		return NI_ERROR;
+	//CFG1
+	if (niHAL->WriteReg(0xEB400301, RFA_CLKGEN_CFG1) != NI_OK)
+		return NI_ERROR;
+	//CFG2
+	if (niHAL->WriteReg(0xEB040302, RFA_CLKGEN_CFG2) != NI_OK)
+		return NI_ERROR;
+	//CFG3
+	if (niHAL->WriteReg(0x68860303, RFA_CLKGEN_CFG3) != NI_OK)
+		return NI_ERROR;
+	//CFG4
+	if (niHAL->WriteReg(0x68860314, RFA_CLKGEN_CFG4) != NI_OK)
+		return NI_ERROR;
+	//CFG5
+	if (niHAL->WriteReg(0x10000BE5, RFA_CLKGEN_CFG5) != NI_OK)
+		return NI_ERROR;
+	//CFG6
+	if (niHAL->WriteReg(0x04BE03E6, RFA_CLKGEN_CFG6) != NI_OK)
+		return NI_ERROR;
+	//CFG7
+	if (niHAL->WriteReg(0xBD0037F7, RFA_CLKGEN_CFG7) != NI_OK)
+		return NI_ERROR;
+	//CFG8
+	if (niHAL->WriteReg(0x20009D98, RFA_CLKGEN_CFG8) != NI_OK)
+		return NI_ERROR;
+		*/
+	//STROBE
+	if(niHAL->WriteReg(1, RFA_CLKGEN_STROBE ) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_CLKGEN_STROBE ) != NI_OK)
+		return NI_ERROR;
+}
+
+
+
+
+	////CFG0
+	//if (niHAL->WriteReg(0xEB400320, RFA_CLKGEN_CFG0) != NI_OK)
+	//	return NI_ERROR;
+	////CFG1
+	//if (niHAL->WriteReg(0xEB400301, RFA_CLKGEN_CFG1) != NI_OK)
+	//	return NI_ERROR;
+	////CFG2
+	//if (niHAL->WriteReg(0xEB040302, RFA_CLKGEN_CFG2) != NI_OK)
+	//	return NI_ERROR;
+	////CFG3
+	//if (niHAL->WriteReg(0x68860303, RFA_CLKGEN_CFG3) != NI_OK)
+	//	return NI_ERROR;
+	////CFG4
+	//if (niHAL->WriteReg(0x68860314, RFA_CLKGEN_CFG4) != NI_OK)
+	//	return NI_ERROR;
+	////CFG5
+	//if (niHAL->WriteReg(0x10000BE5, RFA_CLKGEN_CFG5) != NI_OK)
+	//	return NI_ERROR;
+	////CFG6
+	//if (niHAL->WriteReg(0x04BE03E6, RFA_CLKGEN_CFG6) != NI_OK)
+	//	return NI_ERROR;
+	////CFG7
+	//if (niHAL->WriteReg(0xBD0037F7, RFA_CLKGEN_CFG7) != NI_OK)
+	//	return NI_ERROR;
+	////CFG8
+	//if (niHAL->WriteReg(0x20009D98, RFA_CLKGEN_CFG8) != NI_OK)
+	//	return NI_ERROR;
+
+
+
+//NI_RESULT DDE3_API::ConfigureCLOCKGEN()
+//{
+//	//POWER ON CLK
+//	if (niHAL->WriteReg(1, RFA_CLKGEN_POWER) != NI_OK)
+//		return NI_ERROR;
+//	//CFG0
+//	if (niHAL->WriteReg(0x74080060, RFA_CLKGEN_CFG0) != NI_OK)
+//		return NI_ERROR;
+//	//CFG0
+//	if (niHAL->WriteReg(0xA783E001, RFA_CLKGEN_CFG1) != NI_OK)
+//		return NI_ERROR;
+//	//STROBE
+//	if (niHAL->WriteReg(1, RFA_CLKGEN_STROBE) != NI_OK)
+//		return NI_ERROR;
+//	if (niHAL->WriteReg(0, RFA_CLKGEN_STROBE) != NI_OK)
+//		return NI_ERROR;
+//}
+
+
+NI_RESULT DDE3_API::ConfigureDAC(unsigned int channel, unsigned int ENABLE)
+{
+		ReadHardwareProperties();
+
+				//DISABLE SYNC
+		if(niHAL->WriteReg(0, RFA_DACCNRL_SYNC + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		Sleep(50);
+
+		//DAC 1+2
+		if (niHAL->WriteReg(0, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		//REMOVE RESET
+		if (niHAL->WriteReg(3, RFA_DACCNRL_RESET + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		//RESET DAC
+		if(niHAL->WriteReg(0, RFA_DACCNRL_RESET + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		//REMOVE RESET
+		if (niHAL->WriteReg(3, RFA_DACCNRL_RESET + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		Sleep(50);
+
+		//CONFIG3
+		if (niHAL->WriteReg(0x371, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+		//if (niHAL->WriteReg(0x370, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		Sleep(50);
+
+
+		//ONLY PLL_BYPASS (DLL ON)
+		//502
+		if(niHAL->WriteReg(0x502, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		//DAC 1
+		if (niHAL->WriteReg(2, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		
+		//SDO AS DLL_LOCKED
+		if(niHAL->WriteReg(0xE00 + (2 << 5), RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		//DAC 2
+		if (niHAL->WriteReg(1, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		
+		//SDO AS DLL_LOCKED
+		if(niHAL->WriteReg(0xE00, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		//DAC 1+2
+		if (niHAL->WriteReg(0, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+
+		//INTERPOLATION DISABLE
+		if(niHAL->WriteReg(0x100, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		////DLL BYPASS AND DLL BYPASS
+		//if(niHAL->WriteReg(0x502, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+		//	return NI_ERROR;
+		////STROBE
+		//if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+		//	return NI_ERROR;
+		//if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+		//	return NI_ERROR;
+		
+		
+		//DAC 1
+		if (niHAL->WriteReg(2, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		//CONFIG10
+		//0xA00
+		if(niHAL->WriteReg(0xA00 + (0x8 << 4) + 0+ 5  , RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		//DAC 2
+		if (niHAL->WriteReg(1, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		//CONFIG10
+		//0xAC0
+		if(niHAL->WriteReg(0xA00 + (0x0 << 4) + 0 , RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		
+		//DAC  1+2
+		if (niHAL->WriteReg(0, RFA_DACCNRL_DACSEL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+
+		//CONFIG6
+		if(niHAL->WriteReg(0x62C, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+		//ONE COMPLEMENT AND OTHER INIT PARAMS
+		if (niHAL->WriteReg(0x280, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		for (int i=0;i<5;i++)
+		{
+		//RESTART DLL
+		if (niHAL->WriteReg(0x804, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		Sleep(10);
+
+		//DLL_RESTART RESET
+		if(niHAL->WriteReg(0x800, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		}
+		Sleep(300);
+
+		//CONFIG3
+		if (niHAL->WriteReg(0x373, RFA_DACCNRL_VAL + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(1, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		if (niHAL->WriteReg(0, RFA_DACCNRL_STROBE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+		Sleep(50);
+
+		//ENABLE SYNC
+		//if(niHAL->WriteReg(1, RFA_DACCNRL_SYNC + __CHOFFSET * channel) != NI_OK)
+		//	return NI_ERROR;
+
+
+
+		//for (int i=0;i<2550;i++)
+		//{
+		//	if (niHAL->WriteReg(0, 0xF0000042) != NI_OK)
+		//		return NI_ERROR;
+		//	Sleep(1);
+		//}
+
+
+
+	return NI_OK;
+}
+
+
+
+NI_RESULT DDE3_API::EnableChanel(unsigned int channel, unsigned int ENABLE)
+{
+
+	if (ENABLE > 1 || ENABLE <0 ) 
+		return NI_PARAM_OUT_OF_RANGE;
+		
+	//CHANNEL ENABLE
+	if(niHAL->WriteReg(ENABLE, RFA_CHANNEL_ENABLE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+	return NI_OK;
+}
+
+
+
+/*
+	SETUP ENERGY EMULATION MODE
+	mode			0					fixed energy
+					1					spectrum
+	energy			0 .. 2^15 e			fixed energy amplitude
+*/
+NI_RESULT DDE3_API::ConfigureEnergy(unsigned int channel, unsigned int MODE, unsigned int ENERGY)
+{
+	NI_STATUS Status;
+
+	if(niHAL->WriteReg(MODE, RFA_ENERGY_FIXSPE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+	if(niHAL->WriteReg(ENERGY, RFA_ENERGY_FIXENERGY + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+/*
+	SETUP ENERGY EMULATION MODE
+	spectrum		*					spectrum
+	spectrumLen							length of the spectrum vector
+*/
+
+NI_RESULT DDE3_API::ProgramSpectrum(unsigned int channel, unsigned int *spectrum, unsigned int spectrumLen)
+{
+	int i;
+	unsigned int q;
+	double max;
+	double * cumulativo  = new double [32000];
+	unsigned int * Icumulativo  = new unsigned int [32000];
+	q=spectrum[0];
+	cumulativo[0] = 0;
+	for (i=1;i<16384;i++)
+	{
+		if (spectrumLen > i)
+		{
+			q=spectrum[i];
+		}
+		else
+		{
+			q=0;
+		}
+
+		cumulativo[i] = cumulativo[i-1] + q;
+	}
+
+	max = cumulativo[16383];
+
+	for (i=0;i<16384;i++)
+	{
+		cumulativo[i] =  (( cumulativo[i] /  max) * (pow(2.0,32)-1));
+		Icumulativo[i] = (unsigned int) cumulativo[i];
+	}
+
+	
+	if(niHAL->WriteReg(1, RFA_ENERGY_PROGMODE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+//	for (int j=0;j<16384;j++)
+//		if(niHAL->WriteReg(Icumulativo[j], j+ RFA_ENERGY_MEMBA + __CHOFFSET * channel) != NI_OK)
+//			return NI_ERROR;
+
+	if(niHAL->WriteArray(Icumulativo, RFA_ENERGY_MEMBA + __CHOFFSET * channel, 16384) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(0, RFA_ENERGY_PROGMODE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+	if(niHAL->WriteReg(1, RFA_ENERGY_FLUSH + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ENERGY_FLUSH + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+/*
+	SETUP TIMEBASE
+	mode			0					fixed rate
+					1					poisson
+					2					external trigger
+	rate			0 .. 1 MHz 			rate of the pulses
+*/
+
+NI_RESULT DDE3_API::ConfigureTimebase(	unsigned int channel, 
+										unsigned int MODE, 
+										double RATE, 
+										unsigned long DeatTime, 
+										bool Parallelizable)
+{
+	NI_STATUS Status;
+
+	double fRATE;
+	double pRATE;
+	
+	if (RATE < 0.001) RATE =0.001;
+
+	fRATE = _clockFREQUENCY/RATE; 
+	pRATE = ((RATE * (1.0 / _clockFREQUENCY))) * pow(2.0, 32);
+
+	if(niHAL->WriteReg(MODE, RFA_TIMEBASE_STATSOURCEMUX + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(fRATE, RFA_TIMEBASE_RATE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(pRATE, RFA_TIMEBASE_POISSONP + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg((unsigned int) DeatTime, RFA_TIMEBASE_DEADTIME + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if (Parallelizable==true)
+	{
+		if(niHAL->WriteReg(1, RFA_TIMEBASE_PARFLAG + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+	else
+	{
+		if(niHAL->WriteReg(0, RFA_TIMEBASE_PARFLAG + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+
+
+
+	return NI_OK;
+}
+
+/*
+	SETUP DIGITAL CONNECTOR
+	outtriggered	0					disabled
+					1					enabled
+	outtriggerlen	0... 10us			ns pulse len
+					
+
+*/
+
+NI_RESULT DDE3_API::ConfigureDIO(unsigned int channel, unsigned int OUTTRIGGEREN, unsigned int OUTTRIGGERLEN)
+{
+	if(niHAL->WriteReg(OUTTRIGGEREN, RFA_TIMEBASE_TRIGGEROUTEN + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	int length;
+
+	length = _clockFREQUENCY * ( ((double)OUTTRIGGERLEN) * 10e-9);
+	if (length < 1)
+		length = 1;
+
+	if(niHAL->WriteReg(length, RFA_TIMEBASE_TRIGGEROUTLEN + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+/*
+	SETUP DIGITAL RC
+	risetime		0 .. 10us			risetime in ns
+	falltime		0 .. 10ms			falltime in ns
+*/
+
+NI_RESULT DDE3_API::ConfigureDRC(unsigned int channel, unsigned int RISETIME, unsigned int FALLTIME, unsigned int ENABLE)
+{
+	/*double AGain, BGain; 
+	double AZerosI[4], BZerosI[4];
+	double AZerosR[4], BZerosR[4];
+	int AnZeros, BnZeros;
+	double APolesI[4], BPolesI[4];
+	double APolesR[4], BPolesR[4];
+	double gain1;
+	double gain2;
+	double a1, a2;
+	double scale;
+	int AnPoles, BnPoles;
+	UINT64 beta11, beta12, alfa11, beta21, beta22, alfa21, gain21;
+	unsigned int msb, lsb;
+
+	CalculateFilter((double)FALLTIME/1000.0, _clockFREQUENCY, &AGain, AZerosI, AZerosR, &AnZeros, APolesI, APolesR, &AnPoles);
+	a1 = APolesR[0];
+	gain1 = 2.0 / AGain;
+	if (RISETIME > 0.008)
+	{
+		CalculateFilter((double)RISETIME/1000.0, _clockFREQUENCY, &BGain, BZerosI, BZerosR, &BnZeros, BPolesI, BPolesR, &BnPoles);
+		a2 = BPolesR[0];
+		gain2 = 2.46/BGain;
+	}
+	else
+	{
+		a2=0;
+		gain2 = 1;
+	}
+	scale = (double)pow(2.0,48.0);
+	beta11 =(UINT64) ((double)pow(a1,1) * scale);
+	beta12 =(UINT64) ((double)pow(a1,2) * scale);
+	alfa11 =(UINT64) ((double)pow(a1,3) * scale);
+
+	scale = (double)pow(2.0,47.0);
+	beta21 =(UINT64) ((double)pow(a2,1) * scale);
+	beta22 =(UINT64) ((double)pow(a2,2) * scale);
+	alfa21 =(UINT64) ((double)pow(a2,3) * scale);
+	gain21 =(UINT64) ((double)gain2 * scale);
+
+	msb = (beta11>>32) & 0xFFFFFFFF;
+	lsb = (beta11) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_BETA11A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_BETA11B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (beta12>>32) & 0xFFFFFFFF;
+	lsb = (beta12) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_BETA12A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_BETA12B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (alfa11>>32) & 0xFFFFFFFF;
+	lsb = (alfa11) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_ALFA11A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_ALFA11B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (beta21>>32) & 0xFFFFFFFF;
+	lsb = (beta21) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_BETA21A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_BETA21B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (beta22>>32) & 0xFFFFFFFF;
+	lsb = (beta22) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_BETA22A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_BETA22B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (alfa21>>32) & 0xFFFFFFFF;
+	lsb = (alfa21) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_ALFA21A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_ALFA21B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	msb = (gain21>>32) & 0xFFFFFFFF;
+	lsb = (gain21) & 0xFFFFFFFF;
+	if(niHAL->WriteReg(msb, RFA_DRC_GAIN21A + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(lsb, RFA_DRC_GAIN21B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+*/
+/*
+tau=0.99;
+tau2=0.4;
+[dec2hex(round(tau * 2^32)) ' ' dec2hex(round(tau^2 * 2^32)) ' ' dec2hex(round(tau^3 * 2^32)) ' ' dec2hex(round(tau^4 * 2^32))]
+[dec2hex(round(tau2 * 2^32)) ' ' dec2hex(round((1-tau2) * 2^32)) ' ' dec2hex(round(tau2^2 * 2^32)) ' ' dec2hex(round(tau2^3 * 2^32)) ' ' dec2hex(round(tau2^4 * 2^32))]
+*/
+
+	double tau1;
+	double tau2;
+	double APolesF1[5];
+	double APolesF2[5];
+
+	long unsigned int APolesI1[5];
+	long unsigned int APolesI2[5];
+
+	if (FALLTIME < 10) FALLTIME=10;
+	if (RISETIME < 2)
+	{
+		if(niHAL->WriteReg(1, RFA_DRC_BYPASSLOWPASS + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+		RISETIME=2;
+	}
+	else
+	{
+		if(niHAL->WriteReg(0, RFA_DRC_BYPASSLOWPASS + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+	tau1 = 1-(1.0/(PI *2.0 * ((double)FALLTIME) * 1e-9 * _clockFREQUENCY/4));								
+	tau2 = 1-(1.0/(PI *2.0 * ((double)RISETIME) * 1e-9 * _clockFREQUENCY/4));								
+
+	APolesF1[0] = pow(tau1,1)* pow(2,32);
+	APolesF1[1] = -1;
+	APolesF1[2] = pow(tau1,2)* pow(2,32);
+	APolesF1[3] = pow(tau1,3)* pow(2,32);
+	APolesF1[4] = pow(tau1,4)* pow(2,32);
+	
+	APolesF2[0] = pow(tau2,1)* pow(2,32);
+	APolesF2[1] = pow(1-tau2,1)* pow(2,32);
+	APolesF2[2] = pow(tau2,2)* pow(2,32);
+	APolesF2[3] = pow(tau2,3)* pow(2,32);
+	APolesF2[4] = pow(tau2,4)* pow(2,32);
+
+	for (int i=0;i<5;i++)
+	{
+		APolesI1[i] = (unsigned int) APolesF1[i];
+		APolesI2[i] = (unsigned int) APolesF2[i];
+	}
+
+
+	if(niHAL->WriteReg((unsigned int) APolesI1[0], RFA_DRC_PALFA1 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI1[1], RFA_DRC_PALFA1B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI1[2], RFA_DRC_PALFA2 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI1[3], RFA_DRC_PALFA3 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI1[4], RFA_DRC_PALFA4 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+
+	if(niHAL->WriteReg((unsigned int) APolesI2[0], RFA_DRC_LALFA1 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI2[1], RFA_DRC_LALFA1B + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI2[2], RFA_DRC_LALFA2 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI2[3], RFA_DRC_LALFA3 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((unsigned int) APolesI2[4], RFA_DRC_LALFA4 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_DRC_RESET + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_DRC_RESET + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(0, RFA_DRC_OS + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(ENABLE, RFA_DRC_ENABLE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::ConfigureShapeGenerator(	unsigned int channel,
+												int *shape,
+												unsigned int shape_id,
+												unsigned int shape_length, 
+												int multishape_id,
+												unsigned int rising_falling_crosspoint,
+												unsigned int interpolator_factor_rising,
+												unsigned int interpolator_factor_falling,
+												bool reconfigure_shape,
+												bool enable_shape)
+{
+	UINT32 interShape[4096];
+	UINT32 forstep = 0;
+
+	if (enable_shape)
+	{
+		if(niHAL->WriteReg(1,  shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_ENABLE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+	else
+	{
+		if(niHAL->WriteReg(0,  shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_ENABLE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+	}
+
+	if(niHAL->WriteReg(multishape_id,  shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_MULTISHAPEID + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if ((interpolator_factor_rising>0) || (interpolator_factor_falling>0))
+	{
+		UINT32 alfa_up, alfa_down;
+		UINT32 ratio_up, ratio_down;
+		UINT32 en_up, en_down;
+		UINT32 crosspoint;
+
+		ratio_up = interpolator_factor_rising-2;
+		ratio_down = interpolator_factor_rising-2;
+		alfa_up = (0x10000/(ratio_up +2));
+		alfa_down = (0x10000/(ratio_down +2));
+		crosspoint = rising_falling_crosspoint / 2;
+		forstep = 0;
+
+		if (interpolator_factor_falling > 0)
+			en_up = 1;
+		else
+			en_up = 0;
+
+		if (interpolator_factor_falling > 0)
+			en_down = 1;
+		else
+			en_down = 0;
+
+		/*
+		if(niHAL->WriteReg((alfa_up << 16) + ratio_up,  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_INTERP_UP + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+
+		if(niHAL->WriteReg((alfa_down << 16) + ratio_down,  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_INTERP_DOWN + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+
+		if(niHAL->WriteReg((en_down << 1) + en_up,  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_INTERP_ENABLE + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+
+		if(niHAL->WriteReg(crosspoint,  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_INTERP_CROSS + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+				*/
+	}
+
+
+	if (reconfigure_shape)
+		{
+			if(niHAL->WriteReg(1,  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_PROG + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;			
+
+			memset(interShape,0,4096);
+
+			if (forstep==0)
+			{
+				for (int j=0;j<shape_length/2;j++)
+				{
+					interShape[j]  = (((UINT32)shape[2*j]) << 0) + (((UINT32)shape[2*j+1]<<16) ) ;
+				}
+			}
+			else
+			{
+				for (int j=0;j<shape_length/(2*4);j++)
+				{
+					interShape[j]  = (((UINT32)shape[(2*4)*j]) << 0) + (((UINT32)shape[(2*4)*j+4]<<16) ) ;
+				}
+			}
+			
+			if(niHAL->WriteArray((unsigned int *) interShape, shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_BA + __CHOFFSET * channel,2048) != NI_OK)
+				return NI_ERROR;
+		
+			if(niHAL->WriteReg(interShape[0],  shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_BA + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+
+			if(niHAL->WriteReg(interShape[1],  1+ shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_BA + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+			if (forstep==0)
+			{
+				if(niHAL->WriteReg(((int)(shape_length)/2) +1 ,  shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_LEN + __CHOFFSET * channel) != NI_OK)
+					return NI_ERROR;			
+			}
+			else
+			{
+				if(niHAL->WriteReg(((int)(shape_length)/(2*4)) +1 ,  shape_id * RFA_SHAPE_OFFSET +  RFA_SHAPE_LEN + __CHOFFSET * channel) != NI_OK)
+					return NI_ERROR;			
+			}
+
+			if(niHAL->WriteReg(0, shape_id * RFA_SHAPE_OFFSET  +  RFA_SHAPE_PROG + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;			
+
+		}
+
+	return NI_OK;
+}
+
+NI_RESULT DDE3_API::ConfigureMultishape(		unsigned int channel,
+												double prob2,
+												double prob3,
+												double prob4,
+												bool enable)
+{
+	if (enable)
+	{
+		double v1, v2, v3;
+		unsigned int vi1, vi2, vi3;
+		v1 = 100 - prob2 - prob3 -prob4;
+		v2 = v1 + prob2;
+		v3 = v2 + prob3;
+		
+		vi1 = (unsigned int) ((v1/100.0)  * ((double)  0xFFFF));
+		vi2 = (unsigned int) ((v2/100.0)  * ((double)  0xFFFF));
+		vi3 = (unsigned int) ((v3/100.0)  * ((double)  0xFFFF));
+
+		
+		if(niHAL->WriteReg(vi1, RFA_MSHAPE_PROB1 + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;	
+		if(niHAL->WriteReg(vi2, RFA_MSHAPE_PROB2 + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;	
+		if(niHAL->WriteReg(vi3, RFA_MSHAPE_PROB3 + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;	
+		if(niHAL->WriteReg(0, RFA_MSHAPE_BYPASS + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;	
+
+	}
+	else
+	{
+		if(niHAL->WriteReg(1, RFA_MSHAPE_BYPASS + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;	
+	}
+
+}
+
+
+/*
+	SETUP DIGITAL RC
+	gauss		0 ... 100				magnitude
+	drift		0 ... 100				magnitude
+*/
+
+NI_RESULT DDE3_API::ConfigureNOISE(unsigned int channel, unsigned int RANDM, unsigned int GAUSSM, unsigned int DRIFTM, unsigned int FLIKERM, unsigned int FLIKERCorner)
+{
+   const unsigned int valori100[] = {1, 16777215, 16777216, 2, 16777214, 11430184, 3, 16777213, 7787294, 7, 16777209, 5305422, 15, 16777201,
+                            3614542, 33, 16777183, 2462559, 70, 16777146, 1677722, 151, 16777065, 1143018, 326, 16776890, 778729, 703,
+                            16776513, 530542};
+
+   const unsigned int valori500[] = {1, 16777215, 16777216, 2, 16777214, 10452533, 5, 16777211, 6512133, 12, 16777204, 4057186, 31, 16777185,
+                            2527706, 80, 16777136, 1574810, 205, 16777011, 981138, 529, 16776687, 611268, 1364,
+                           16775852, 380832, 3513, 16773703, 237266};
+
+   const unsigned int valori1k[] = {1, 16777215, 16777216, 2, 16777214, 9197420, 8, 16777208, 5042108, 26, 16777190, 2764128, 86,
+                            16777130, 1515320, 287, 16776929, 830712, 954, 16776262, 455404, 3173, 16774043, 249656, 10557, 16766659, 136864, 35101,
+                            16742115, 75030};
+
+   const unsigned int valori5k[] = {1, 16777215, 16777216, 2, 16777214, 10057677, 5, 16777211, 6029419, 15, 16777201, 3614542, 42, 16777174,
+                            2166861, 117, 16777099, 1298999, 326, 16776890, 778729, 908, 16776308, 466836, 2525, 16774691, 279861,
+                            7026, 16770190, 167772};
+
+   const unsigned int valori10k[] = {1, 16777215, 16777216, 3, 16777213, 8849977, 9, 16777207, 4668360, 33, 16777183, 2462559, 117, 16777099, 1298999,
+                            421, 16776795, 685222, 1514, 16775702, 361454, 5440, 16771776, 190667, 19543, 16757673, 100577,
+                            70129, 16707087, 53054};
+
+   const unsigned int valori50k[] = {1, 16777215, 16777216, 3, 16777213, 8093017, 13, 16777203, 3903921, 56, 16777160, 1883179, 240, 16776976, 908410,
+                            1030, 16776186, 438200, 4427, 16772789, 211380, 19015, 16758201, 101966, 81565, 16695651, 49186, 347752,
+                        16429464, 23727};
+
+
+   const unsigned int valori100k[] = {1, 16777215, 16777216, 3, 16777213, 7787294, 15, 16777201, 3614542, 70, 16777146, 1677722, 326, 16776890,
+                            778729, 1514, 16775702, 361454, 7026, 16770190, 167772, 32588, 16744628, 77873, 150726, 16626490, 36145,
+                            688444, 16088772, 16777};
+
+   const unsigned int valori500k[] = {1, 16777215, 16777216, 4, 16777212, 7121228, 22, 16777194, 3022664, 120, 16777096, 1282995, 667, 16776549, 544578, 3702,
+							16773514, 231151, 20536, 16756680, 98114, 113670, 16663546, 41645, 621415, 16155801, 17677, 3191294,
+							13585922, 7503};
+
+   const unsigned int valori1M[] = {1, 16777215, 16777216, 4, 16777212, 6852215, 25, 16777191, 2798608, 151, 16777065, 1143018, 908, 16776308, 466836,
+							5440, 16771776, 190667, 32588, 16744628, 77873, 194417, 16582799, 31805, 1133151, 15644065, 12990,
+							5881965, 10895251, 5305
+										};
+
+   const unsigned int  *valori;
+
+	NI_STATUS Status;
+
+	if(niHAL->WriteReg(RANDM, RFA_RN_MAG + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(GAUSSM, RFA_NOISE_GAUSSM + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(DRIFTM, RFA_RW_MAG + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(FLIKERM, RFA_NF_MAGNITUDE + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+
+
+
+	switch( FLIKERCorner )
+	{
+		case 0:
+			valori = valori100;
+			break;
+		case 1:
+			valori = valori500;
+			break;
+		case 2:
+			valori = valori1k;
+			break;
+		case 3:
+			valori = valori5k;
+			break;
+		case 4:
+			valori = valori10k;
+			break;
+		case 5:
+			valori = valori50k;
+			break;
+		case 6:
+			valori = valori100k;
+			break;
+		case 7:
+			valori = valori500k;
+			break;
+		case 8:
+			valori = valori1M;
+			break;
+		default :
+			valori = valori100;
+
+	}
+
+
+	for (int i = 0;i<30;i++)
+	{
+		unsigned int UVal ;
+		if (valori[i] >= 0)
+			UVal = valori[i];
+		else
+			UVal = valori[i]+0xFFFFFF;
+
+		if(niHAL->WriteReg(UVal, i+RFA_NF_COEFF + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+	}
+    
+
+	return NI_OK;
+}
+
+
+/*
+	SETUP GENERAL
+	gain			0..4				
+	offset			-2^15 .. 2^15
+	invert			0 / 1
+					
+
+*/
+
+NI_RESULT DDE3_API::ConfigureGeneral(unsigned int channel, double gain, int offset, unsigned int invert, unsigned int OUTFILTER, unsigned int ANALOGSEL)
+{
+	NI_STATUS Status;
+	unsigned int gainn;
+	gainn = (unsigned int)(gain * 4096);
+
+	if(niHAL->WriteReg(gainn, RFA_OFFGAIN_GAIN + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if (channel==0)
+	{
+		if(niHAL->WriteReg(offset-510, RFA_OFFGAIN_OFFSET + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+	else
+	{
+		if(niHAL->WriteReg(offset-850, RFA_OFFGAIN_OFFSET + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+
+	if(niHAL->WriteReg(invert, RFA_OFFGAIN_INVERT + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	//if(niHAL->WriteReg(OUTFILTER, RFA_OFFGAIN_OUTFILTER + __CHOFFSET * channel) != NI_OK)
+	//	return NI_ERROR;
+
+	SetAnalogDatapath(channel, OUTFILTER, ANALOGSEL );
+
+
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::ConfigureLFSR(unsigned int channel, unsigned long SEED, t_LFSR_ID LFSR_ID, t_LFSR_OPERATION Operation)
+{
+	NI_STATUS Status;
+	unsigned int gainn;
+
+	switch (Operation)
+	{
+		case LFSR_REPROGRAM:
+			switch (LFSR_ID)
+			{
+				case LFSR_ENERGY:
+					if(niHAL->WriteReg(1, RFA_ENERGY_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					if(niHAL->WriteReg(0, RFA_ENERGY_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					break;
+
+				case LFSR_TIMEBASE:
+					if(niHAL->WriteReg(1, RFA_TIMEBASE_SEEDPROG + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					if(niHAL->WriteReg(0, RFA_TIMEBASE_SEEDPROG + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					break;
+
+				case LFSR_NOISE_GAUSS:
+					if(niHAL->WriteReg(1, RFA_NOISE_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					if(niHAL->WriteReg(0, RFA_NOISE_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					break;
+
+				case LFSR_NOISE_RW:
+					if(niHAL->WriteReg(1, RFA_RW_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					if(niHAL->WriteReg(0, RFA_RW_STARTSEEDGEN + __CHOFFSET * channel) != NI_OK)
+						return NI_ERROR;
+					break;
+
+				case LFSR_NOISE_FLIKR:
+
+					break;
+
+				case LFSR_NOISE_RN:
+
+					break;
+
+
+			}
+
+
+		default:
+			return NI_ERROR;
+	}
+
+
+
+
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::ConfigureBaselineDrift(		unsigned int channel,
+												int *baseline,
+												unsigned int baseline_length, 
+												unsigned int interpolator_factor_slow,
+												unsigned int interpolator_factor_fast,
+												bool reconfigure_drift,
+												bool enable_shape,
+												bool reset)
+{
+
+
+
+	UINT32 interShape[5000];
+
+	if (enable_shape)
+	{
+		if(niHAL->WriteReg(1,  RFA_BLD_ENABLE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+	}
+	else
+	{
+		if(niHAL->WriteReg(0,  RFA_BLD_ENABLE + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+	}
+
+	if(niHAL->WriteReg(50*interpolator_factor_slow,  RFA_BLD_RSLOW + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+	if(niHAL->WriteReg(10*interpolator_factor_fast,  RFA_BLD_RFAST + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+	if(niHAL->WriteReg( 0xFFFFFFFF/(interpolator_factor_slow*50),  RFA_BLD_ASLOW + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+	if(niHAL->WriteReg(0xFFFFFFFF/ (interpolator_factor_fast*10),  RFA_BLD_AFAST + __CHOFFSET * channel) != NI_OK)
+			return NI_ERROR;
+
+
+	if (reconfigure_drift)
+		{
+			if(niHAL->WriteReg(1,  RFA_BLD_PROG + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;			
+
+			if (baseline_length > 4095)
+				baseline_length=4095;
+			for (int j=0;j<baseline_length;j++)
+			{
+				interShape[j]  = baseline[j];// (((UINT32)baseline[2*j]) << 0) + (((UINT32)baseline[2*j+1]<<16) ) ;
+
+			}
+			
+			if(niHAL->WriteArray((unsigned int *) interShape, RFA_BLD_BA + __CHOFFSET * channel, baseline_length) != NI_OK)
+				return NI_ERROR;
+		
+			if(niHAL->WriteReg(interShape[0],  RFA_BLD_BA + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;
+
+			if(niHAL->WriteReg(((int)(baseline_length)),  RFA_BLD_MEMLEN  + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;			
+
+			if(niHAL->WriteReg(0,  RFA_BLD_PROG + __CHOFFSET * channel) != NI_OK)
+				return NI_ERROR;						
+
+		}
+
+}
+
+
+
+/*
+	CH TO VOLTAGE
+	channel		0 ... 2^15					
+*/
+
+double DDE3_API::ChannelsToVoltage(int channel, int channels)
+{
+	return _VoltageChannelFactor[channel] * channels;
+}
+
+
+
+/*
+	VOLTAGE TO CHANNEL
+	channel		0 ... 2^15					
+*/
+
+unsigned int DDE3_API::VoltageToChannels(unsigned int channel, double voltage)
+{
+	return voltage / _VoltageChannelFactor[channel] ;
+}
+
+
+/*
+	GET STATS
+	cps				counts per second
+	ccounter		general event counter
+	sat				saturation counter
+	overflow		non poisson event generated
+*/
+
+NI_RESULT DDE3_API::GetStat(unsigned int channel, unsigned int *cps,  unsigned int *live, UINT64 *ccounter, unsigned int *overflow)
+{
+	unsigned int temp, temp2;
+	if(niHAL->ReadReg(&temp, RFA_MON_CPSR + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	*cps = temp;
+
+	if(niHAL->ReadReg(&temp, RFA_MON_CPSLIVER + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	*live = temp;
+
+	if(niHAL->ReadReg(&temp, RFA_MON_CPSR_CCOUNTER1 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->ReadReg(&temp2, RFA_MON_CPSR_CCOUNTER2 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	*ccounter = temp + temp2 << 32;
+
+	if(niHAL->ReadReg(&temp, RFA_MON_CPSR_CCOUNTER1 + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	*overflow = temp;
+
+	return NI_OK;
+}
+
+
+/*
+	RESETS THE USER COUNTER
+
+	*/
+NI_RESULT DDE3_API::ResetCCounter(unsigned int channel)
+{
+	if(niHAL->WriteReg(1, RFA_MON_CPSR_RESET + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_MON_CPSR_RESET + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+	return NI_OK;
+}
+
+NI_RESULT DDE3_API::UnlockDisplays()
+{
+	if(niHAL->WriteReg(0xF1CA, RFA_CONNECTED+ RFA_UC_BA + 0) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::UpdateDisplayStatus(unsigned int channel, int timemode, int rate, int ratep, char *time_str, int energy_mode, int energy, char *energy_str, char *shape_str, int live)
+{
+	unsigned int tmpstr[20];
+	int i;
+
+	if(niHAL->WriteReg(timemode, RFA_DISPLAY_TIMEMODE+ RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg((rate >> 16) ,RFA_DISPLAY_RATE + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((rate & 0xFFFF) ,1 + RFA_DISPLAY_RATE + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+	
+	if(niHAL->WriteReg((ratep >> 16) ,RFA_DISPLAY_RATEP + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg((ratep & 0xFFFF) ,1 + RFA_DISPLAY_RATEP + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+
+	
+	if ((time_str != NULL) )
+	{
+		i=0;
+		memset(tmpstr,0,20*4);
+		while((*time_str != '\0') && (i<7))
+		{
+			tmpstr[i++] = (*time_str << 8) + *(time_str+1);
+			time_str+=2;
+		}
+		if(niHAL->WriteArray(tmpstr, RFA_DISPLAY_TIMESTR + RFA_UC_BA + RFA_UC_CHOFF * channel, 7) != NI_OK)
+			return NI_ERROR;
+
+	}
+	if(niHAL->WriteReg(energy_mode ,RFA_DISPLAY_ENERGYMODE + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+
+	if ((energy_str != NULL) )
+	{
+		i=0;
+		memset(tmpstr,0,20*4);
+		while((*energy_str != '\0') && (i<14))
+		{
+			tmpstr[i++] = (*energy_str << 8) + *(energy_str+1);
+			energy_str+=2;
+			 
+		}
+		if(niHAL->WriteArray(tmpstr, RFA_DISPLAY_ENERGYSTR + RFA_UC_BA + RFA_UC_CHOFF * channel, 7) != NI_OK)
+			return NI_ERROR;
+
+	}
+
+	if(niHAL->WriteReg(energy ,RFA_DISPLAY_ENERGY + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+
+	if ((shape_str != NULL) )
+	{
+		i=0;
+		memset(tmpstr,0,20*4);
+		while((*shape_str != '\0') && (i<14))
+		{
+			tmpstr[i++] = (*shape_str << 8) + *(shape_str+1);
+			shape_str+=2;
+		}
+		if(niHAL->WriteArray(tmpstr, RFA_DISPLAY_SHAPE + RFA_UC_BA + RFA_UC_CHOFF * channel, 7) != NI_OK)
+			return NI_ERROR;
+
+	}
+
+	if(niHAL->WriteReg(live ,RFA_DISPLAY_LIVE + RFA_UC_BA + RFA_UC_CHOFF * channel) != NI_OK)
+		return NI_ERROR;
+	
+	return NI_OK;
+}
+
+
+
+
+NI_RESULT DDE3_API::SetAnalogDatapath(unsigned int channel, unsigned int filter, unsigned int hvlv)
+{
+	if (channel==0)
+		peout1 = (peout1 & 0xC) + (filter << 3) +  (hvlv << 2);
+	else
+		peout1 = (peout1 & 0x3) + (filter << 1) +  (hvlv << 0);
+
+	if(niHAL->WriteReg(peout1, RFA_PORTEXP3+ RFA_UC_BA + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+
+}
+
+
+/*
+	GET AN OUTPUT SHAPE
+	data			vector with downloaded shape
+	len				length of the data downloaded
+	*/
+NI_RESULT DDE3_API::GetSignalLoopback(unsigned int channel, INT32 *data, unsigned int *len)
+{
+	int i;
+	unsigned int temp;
+	int st;
+	//unsigned int * buffer  = new unsigned int [20000];
+	unsigned int buffer[20000];
+	//if(niHAL->ReadReg(&temp, RFA_MON_CPSR_DATAREADY + __CHOFFSET * channel) != NI_OK)
+	//	return NI_ERROR;
+	
+	//if (temp & 0x01 == 1)
+	while (1)
+	{
+		if(niHAL->ReadArray(buffer, RFA_MON_MEMBA + __CHOFFSET * 2*channel, 8192) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(1, RFA_MON_RESTOREACQ + __CHOFFSET *  channel) != NI_OK)
+			return NI_ERROR;
+		if(niHAL->WriteReg(0, RFA_MON_RESTOREACQ + __CHOFFSET *channel) != NI_OK)
+			return NI_ERROR;
+
+		for (i=0;i<8192;i++)
+		{
+			st = (INT32) (buffer[i] & 0xFFF);
+			if (st>0x7FF)
+				data[i] = -st+0x1FFF;
+			else
+				data[i] = st;
+			
+		}
+		*len = 8192;
+	//	delete [] buffer;
+		return NI_OK;
+	}
+	//else
+	//	return NI_NO_DATA_AVAILABLE;
+	
+}
+
+
+NI_RESULT DDE3_API::ResetSpectrum(unsigned int channel)
+{
+	if(niHAL->WriteReg(1, RFA_SPELOOP_RESETSM + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_SPELOOP_RESETSM + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	
+	return NI_OK;
+}
+
+
+
+NI_RESULT DDE3_API::ReprogramLFSREnergy(ULONG64 seed, unsigned int channel)
+{
+
+	return NI_OK;
+}
+NI_RESULT DDE3_API::ReprogramLFSRTimebase(ULONG64 seed, unsigned int channel)
+{
+	//STROBE SEED GENERATION
+	if(niHAL->WriteReg(1, RFA_TIMEBASE_SEEDPROG + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_TIMEBASE_SEEDPROG + __CHOFFSET * channel) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::ReprogramLFSRMultishape(ULONG64 seed, unsigned int channel)
+{
+	return NI_OK;
+}
+
+NI_RESULT DDE3_API::ReprogramLFSRNoise(ULONG64 seed, unsigned int channel)
+{
+	return NI_OK;
+}
+
+
+/*
+	GET SPECTRUM GENERATED
+	data			vector with downloaded shape
+	len				length of the data downloaded
+	*/
+NI_RESULT DDE3_API::GetSpectrumLoopback(unsigned int channel, UINT32*data, unsigned int *len)
+{
+	int i;
+	//unsigned int * buffer  = new unsigned int [5000];
+	unsigned int  buffer[5000];
+	
+		if (niHAL->ReadArray(buffer, RFA_SPELOOP_MEMBA + __CHOFFSET * 2* channel, 4096) != NI_OK)
+			return NI_ERROR;
+
+	
+	for (i=0;i<4096;i++)
+		data[i] = (UINT32)buffer[i];
+
+	*len = 4096;
+	//delete [] buffer;
+	return NI_OK;
+
+}
+
+
+/*
+	ACTIVATE GET UID
+	*data			vector with UID
+	*/
+NI_RESULT DDE3_API::ActiveteGetUID(unsigned int *key1, unsigned int *key2)
+{
+	NI_STATUS Status;
+	unsigned int v;
+	if (niHAL->ReadReg (&v, RFA_ICAPDNA_UID1)!= NI_OK)
+		return NI_ERROR ;
+	*key1 = v;
+	if (niHAL->ReadReg (&v, RFA_ICAPDNA_UID2)!= NI_OK)
+		return NI_ERROR ;
+	*key2 = v;
+	return NI_OK;
+
+}
+
+/*
+	ACTIVATE PROGRAM KEY
+	*data			vector with the key
+	*/
+NI_RESULT DDE3_API::ActiveteRegister(unsigned char *data)
+{
+	int i;
+
+
+	NI_STATUS Status;
+
+	return NI_OK;
+
+}
+
+NI_RESULT DDE3_API::IsActivated(unsigned int *data)
+{
+	unsigned int v;
+	if (niHAL->ReadReg (&v, RFA_ICAPDNA_ENABLE)!= NI_OK)
+		return NI_ERROR ;
+
+	if ( (v & 0x01) == 1)
+		*data = 1;
+	else
+		*data = 0;
+	NI_STATUS Status;
+
+	return NI_OK;
+
+}
+
+/*
+	GET HARDWARE INFORMATION
+
+	*/
+
+NI_RESULT DDE3_API::HardwareInfo(unsigned int *HWREV, unsigned int *FWREV, unsigned int *HWOPTIONS)
+{
+
+
+	if (niHAL->ReadReg(HWREV, RFA_INFO_BOARDREV) != NI_OK)
+		return NI_ERROR ;
+
+	if (niHAL->ReadReg(FWREV, RFA_INFO_FIRMWARE_RELEASE) != NI_OK)
+		return NI_ERROR ;
+
+	if (niHAL->ReadReg(HWOPTIONS, RFA_INFO_OPTIONS) != NI_OK)
+		return NI_ERROR ;
+
+	NI_STATUS Status;
+
+	return NI_OK;
+}
+
+
+
+/*
+	Reboot
+		mode	0		standard mode
+				1		bootloader
+*/
+#define RFA_ICAPDNA_REBOOTADDR			0x00000700
+#define RFA_ICAPDNA_UNLOCK				0x00000701
+#define RFA_ICAPDNA_nREBOOT				0x00000702
+NI_RESULT DDE3_API::Reboot(unsigned int mode)
+{
+	NI_STATUS Status;
+	UINT32 address;
+	if (mode == 1)
+	{
+		if(niHAL->WriteReg(0x10000, RFA_ICAPDNA_REBOOTADDR ) != NI_OK)
+			return NI_ERROR;
+	}
+	else
+	{
+		if(niHAL->WriteReg(0x400000, RFA_ICAPDNA_REBOOTADDR ) != NI_OK)
+			return NI_ERROR;
+
+	}
+
+	if(niHAL->ReadReg(&address, RFA_ICAPDNA_REBOOTADDR ) != NI_OK)
+		return NI_ERROR;
+
+
+	if(niHAL->WriteReg(0xABBA5511, RFA_ICAPDNA_UNLOCK ) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(0xABBA5511, RFA_ICAPDNA_nREBOOT ) != NI_OK)
+		return NI_ERROR;
+
+	return NI_OK;
+}
+
+/*
+	CheckRunningMode
+		mode	0		standard mode
+				1		bootloader
+*/
+
+NI_RESULT DDE3_API::CheckRunningMode(unsigned int *mode)
+{
+	NI_STATUS Status;
+	unsigned int HWOPTIONS;
+
+	if (niHAL->ReadReg (&HWOPTIONS, 0xFFFE0006)!= NI_OK)
+		return NI_ERROR ;
+
+	if (HWOPTIONS >> 24 == 0x5B)
+		*mode = 0;
+	else
+		if (HWOPTIONS >> 24 == 0x5A)
+		*mode = 1;
+		else
+			*mode = 2;
+	
+
+	return NI_OK;
+}
+
+/*
+	Lock/Unlock Flash
+		mode	0		locked
+				1		unlocked
+*/
+
+NI_RESULT DDE3_API::FlashLock(unsigned int mode)
+{
+	NI_STATUS Status;
+
+	return NI_OK;
+}
+
+/*
+	Flash write page
+		pagen			page number
+		data			page content
+		datalen			page len
+*/
+
+NI_RESULT DDE3_API::FLASHWritePage(unsigned int pagen, unsigned char *data, unsigned int len)
+{
+	NI_STATUS Status;
+
+	return NI_OK;
+}
+
+
+/*
+	Flash erase page
+		pagen			page number
+*/
+
+NI_RESULT DDE3_API::FLASHErasePage(unsigned int pagen)
+{
+	NI_STATUS Status;
+
+	return NI_OK;
+}
+
+
+
+
+/*
+	Write Security EEPROM
+*/
+
+NI_RESULT DDE3_API::SECWriteWord(unsigned int channel, unsigned int address, unsigned int word)
+{
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1 << 24, RFA_ICAPDNA_EEPROM ) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+	Sleep (10);
+	if(niHAL->WriteReg((address << 16) + (2 << 24), RFA_ICAPDNA_EEPROM ) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+	Sleep (10);
+
+	if(niHAL->WriteReg(word + (address << 16) + (4 << 24), RFA_ICAPDNA_EEPROM ) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+	Sleep (10);
+	
+	return NI_OK;
+}
+
+
+
+/*
+	Read Security EEPROM
+*/
+
+NI_RESULT DDE3_API::SECReadWord(unsigned int channel, unsigned int address, unsigned int *word)
+{
+	unsigned int w;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg((address << 16) + (8 << 24), RFA_ICAPDNA_EEPROM ) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF ) != NI_OK)
+		return NI_ERROR;
+
+	Sleep (10);
+
+	if(niHAL->ReadReg(&w, RFA_ICAPDNA_EEPROM ) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+
+	if(niHAL->WriteReg(1, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+	if(niHAL->WriteReg(0, RFA_ICAPDNA_WF) != NI_OK)
+		return NI_ERROR;
+
+	*word = w & 0xFFFF;
+	
+	return NI_OK;
+}
+
+
+NI_RESULT DDE3_API::WriteCalibrarionFlash(unsigned int channel, float offset, float gain, float chctv)
+{
+	unsigned int TEMP;
+
+	memcpy(&TEMP, &gain, 4);
+	if(SECWriteWord(0, 16 + 0 + 6*channel, (TEMP>>0) & 0xFFFF))
+		return NI_ERROR;
+	if(SECWriteWord(0, 16 + 1 + 6*channel, (TEMP>>16) & 0xFFFF))
+		return NI_ERROR;
+
+	memcpy(&TEMP, &offset, 4);
+	if(SECWriteWord(0, 16 + 2 + 6*channel, (TEMP>>0) & 0xFFFF))
+		return NI_ERROR;
+	if (SECWriteWord(0, 16 + 3 + 6*channel, (TEMP>>16) & 0xFFFF))
+		return NI_ERROR;
+
+	memcpy(&TEMP, &chctv, 4);
+	if (SECWriteWord(0, 16 + 4 + 6*channel, (TEMP>>0) & 0xFFFF))
+		return NI_ERROR;
+	if (SECWriteWord(0, 16 + 5 + 6*channel, (TEMP>>16) & 0xFFFF))
+		return NI_ERROR;
+
+	return NI_OK;
+}
